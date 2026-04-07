@@ -22,11 +22,19 @@ function scheduleApply() {
   applyDebounceTimer = setTimeout(() => {
     applyDebounceTimer = null;
     applyFeedFilters();
+    applySidebarWidgets();
     if (!document.getElementById(ACCORDION_ID)) {
       const list = findNavList();
       if (list) injectAccordion(list);
     }
   }, 150);
+}
+
+function applySidebarWidgets() {
+  const newsWidget = findSidebarWidget('LinkedIn News', 'a[href*="/news/story/"]');
+  if (newsWidget) applySidebarWidget(newsWidget, 'news');
+  const puzzlesWidget = findSidebarWidget("Today\u2019s puzzles", 'a[href*="/games/"]');
+  if (puzzlesWidget) applySidebarWidget(puzzlesWidget, 'puzzles');
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +291,10 @@ function attachFeedObserver() {
   feedObserver.observe(document.body, { childList: true, subtree: true });
 
   // Safety-net interval: catches anything the observer debounce misses.
-  feedInterval = setInterval(applyFeedFilters, 2000);
+  feedInterval = setInterval(() => {
+    applyFeedFilters();
+    applySidebarWidgets();
+  }, 2000);
 
   // Apply a few times shortly after attach to handle posts that render
   // asynchronously after the container exists.
