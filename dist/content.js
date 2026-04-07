@@ -11,6 +11,7 @@ const defaultSettings = {
 let currentSettings = { ...defaultSettings };
 let feedObserver = null;
 let debounceTimer = null;
+let debounceMaxTimer = null;
 
 // ---------------------------------------------------------------------------
 // Initialisation
@@ -64,7 +65,7 @@ function waitForFeed() {
       observeFeed(feed);
       applyFeedFilters(feed);
       // Retry to catch posts that finish rendering after the feed appears
-      [500, 1500].forEach((delay) => { setTimeout(() => applyFeedFilters(feed), delay); });
+      [500, 1500, 3000].forEach((delay) => { setTimeout(() => applyFeedFilters(feed), delay); });
     }
   }, 500);
 }
@@ -75,14 +76,26 @@ function observeFeed(feed) {
   feedObserver = new MutationObserver(() => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
+      clearTimeout(debounceMaxTimer);
+      debounceMaxTimer = null;
       applyFeedFilters(feed);
-      // New posts render content asynchronously; retry after short delays
+      // New posts render content asynchronously; retry after increasing delays
       // to catch "Suggested"/"Promoted" labels that appear after the node is inserted.
-      [500, 1500].forEach((delay) => { setTimeout(() => applyFeedFilters(feed), delay); });
+      [500, 1500, 3000, 5000].forEach((delay) => { setTimeout(() => applyFeedFilters(feed), delay); });
     }, 100);
+
+    // maxWait: if mutations are continuous (e.g. LinkedIn lazy-loading images),
+    // the debounce above never fires. Force a run within 500ms regardless.
+    if (!debounceMaxTimer) {
+      debounceMaxTimer = setTimeout(() => {
+        clearTimeout(debounceTimer);
+        debounceMaxTimer = null;
+        applyFeedFilters(feed);
+        [500, 1500, 3000].forEach((delay) => { setTimeout(() => applyFeedFilters(feed), delay); });
+      }, 500);
+    }
   });
 
-  // subtree catches content loading inside newly added post skeletons
   feedObserver.observe(feed, { childList: true, subtree: true });
 }
 
@@ -178,8 +191,8 @@ function isPromotedPost(postEl) {
 function applyPostStyle(post, type) {
   post.dataset.lfrHidden = type;
   if (currentSettings.transparentMode) {
-    post.style.display = '';
-    post.style.opacity = '0.15';
+    post.style.display = 'block';
+    post.style.opacity = '0.4';
     post.style.outline = type === 'suggested'
       ? '2px solid rgba(0, 100, 255, 0.4)'
       : '2px solid rgba(220, 0, 0, 0.4)';

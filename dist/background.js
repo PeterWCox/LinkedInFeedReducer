@@ -38,4 +38,7 @@ function notifyLinkedInTabs(settings) {
 const defaultSettings = {
   hideSuggested: false,
   hidePromoted: false,
+  hideLinkedInNews: false,
+  hidePuzzles: false,
+  transparentMode: false,
 };
