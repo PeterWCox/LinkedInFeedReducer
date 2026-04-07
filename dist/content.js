@@ -202,6 +202,7 @@ function injectAccordion(navList) {
       const key = input.dataset.lfrKey;
       currentSettings = { ...currentSettings, [key]: input.checked };
       persistAndApply();
+      syncAccordionUI();
     });
   });
 
@@ -211,6 +212,7 @@ function injectAccordion(navList) {
       if (currentSettings.transparentMode === transparent) return;
       currentSettings = { ...currentSettings, transparentMode: transparent };
       persistAndApply();
+      syncAccordionUI();
     });
   });
 
