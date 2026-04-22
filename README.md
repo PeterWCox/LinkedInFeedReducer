@@ -12,7 +12,6 @@ LinkedIn is a great place to find a job, reconnect with old colleagues, and read
 - **Hides "Promoted" posts** — ads, but make it professional.
 - **Hides the LinkedIn News widget** — top stories you didn't ask for, served daily.
 - **Hides the Puzzles widget** — because your sudoku habit is none of LinkedIn's business.
-- **In-page controls** — adds a "Reducer" button right in LinkedIn's top nav, next to "Me", with a popover for toggling everything on the fly.
 - **Side panel UI** — same controls in Chrome's side panel if that's more your thing.
 - **Two display modes**:
   - **Transparent** — dims filtered posts so you can see what got caught (great for debugging or morbid curiosity).
@@ -24,7 +23,7 @@ LinkedIn is a great place to find a job, reconnect with old colleagues, and read
 2. Open `chrome://extensions` in Chrome.
 3. Toggle **Developer mode** on (top right).
 4. Click **Load unpacked** and select the [dist/](dist/) folder.
-5. Visit [linkedin.com/feed](https://www.linkedin.com/feed/) and look for the **Reducer** button in the top nav.
+5. Visit [linkedin.com/feed](https://www.linkedin.com/feed/) and open the extension side panel to adjust filters.
 
 ## How it works
 
@@ -34,7 +33,7 @@ LinkedIn is a single-page app that re-renders aggressively and ships obfuscated 
 - Identifies posts by walking children and looking for the literal text **"Suggested"** or **"Promoted"** inside them.
 - Identifies sidebar widgets by their label text (`"LinkedIn News"`, `"Today's puzzles"`).
 - Re-applies filters on every body mutation (debounced) plus a 2-second safety-net interval, so newly loaded posts on infinite scroll get caught without manual intervention.
-- Injects the in-page nav button by cloning an existing nav `<li>` to inherit LinkedIn's styling — chameleon mode.
+- Reads settings from `chrome.storage.sync` and applies them directly on the feed page without adding anything to LinkedIn's top nav.
 
 It's text-matching held together with hope, but it's *resilient* text-matching held together with hope.
 
@@ -44,7 +43,7 @@ It's text-matching held together with hope, but it's *resilient* text-matching h
 dist/
 ├── manifest.json          # MV3 manifest
 ├── background.js          # Service worker (message passing)
-├── content.js             # The main attraction — DOM filtering + in-page UI
+├── content.js             # The main attraction — DOM filtering on the feed page
 ├── sidepanel/             # Chrome side panel UI
 │   ├── sidepanel.html
 │   ├── sidepanel.css

@@ -1,6 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "LinkedIn Feed Reducer",
+  "name": "CleanIn - Hide promoted and suggested posts",
+  "short_name": "CleanIn",
   "version": "1.0.0",
   "description": "Hide suggested and promoted posts from your LinkedIn feed.",
   "permissions": [
@@ -25,7 +26,7 @@
     "default_path": "sidepanel/sidepanel.html"
   },
   "action": {
-    "default_title": "LinkedIn Feed Reducer"
+    "default_title": "CleanIn"
   },
   "icons": {
     "16": "icons/icon16.png",
