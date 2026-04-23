@@ -1,12 +1,16 @@
 <h2><img src="./dist/icons/icon48.png" alt="CleanIn" width="40" height="40" style="vertical-align: middle; margin-right: 10px;" /> CleanIn</h2>
 
-CleanIn is a simple chrome extension that hides suggested and promoted LinkedIn feed posts you never asked to see. 
+CleanIn is a simple Chrome extension that hides unwanted feed content masquerading as real content, such as:
+
+1. Suggested posts  
+2. Promoted and Promoted by posts  
+3. Sidebar content like News and Puzzles  
+
+They are hidden by default, but you can show them as transparent in the side panel if you prefer (dimmed on the page instead of removed).
 
 ![CleanIn demo](screenshots/cleanin-demo.png)
 
-It also hides other elements such as LinkedIn News and Puzzles. 
-
-By default they are totally hidden, and you can switch to transparent mode if you want to debug what was filtered.
+The source code is available if you'd prefer to build it yourself: [https://github.com/PeterWCox/CleanIn](https://github.com/PeterWCox/CleanIn). I'm open to adding additional functionality—feel free to e-mail me.
 
 ## Docs & store releases
 
@@ -18,8 +22,8 @@ By default they are totally hidden, and you can switch to transparent mode if yo
 1. Clone this repo.
 2. Optional: [snippets/](snippets/) has small reference HTML files for the feed and sidebar shapes the content script looks for.
 3. Open `chrome://extensions` in Chrome.
-4. Toggle **Developer mode** on (top right).
-5. Click **Load unpacked** and select the [dist/](dist/) folder.
+4. Toggle Developer mode on (top right).
+5. Click Load unpacked and select the [dist/](dist/) folder.
 6. Visit [linkedin.com](https://www.linkedin.com/) or [linkedin.com/feed](https://www.linkedin.com/feed/) and open the extension side panel to adjust filters.
 
 ## Caveats
