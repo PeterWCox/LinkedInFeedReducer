@@ -6,15 +6,21 @@ CleanIn is a simple chrome extension that hides suggested and promoted LinkedIn 
 
 It also hides other elements such as LinkedIn News and Puzzles. 
 
-You can display them as either transparent or totally hidden. 
+By default they are totally hidden, and you can switch to transparent mode if you want to debug what was filtered.
+
+## Docs & store releases
+
+- Chrome Web Store form copy and justifications: [docs/chrome-web-store-privacy-answers.md](docs/chrome-web-store-privacy-answers.md) (see also [docs/README.md](docs/README.md)).
+- Packaged extension ZIPs for upload: [release/](release/).
 
 ## Developer instructions
 
 1. Clone this repo.
-2. Open `chrome://extensions` in Chrome.
-3. Toggle **Developer mode** on (top right).
-4. Click **Load unpacked** and select the [dist/](dist/) folder.
-5. Visit [linkedin.com/feed](https://www.linkedin.com/feed/) and open the extension side panel to adjust filters.
+2. Optional: [snippets/](snippets/) has small reference HTML files for the feed and sidebar shapes the content script looks for.
+3. Open `chrome://extensions` in Chrome.
+4. Toggle **Developer mode** on (top right).
+5. Click **Load unpacked** and select the [dist/](dist/) folder.
+6. Visit [linkedin.com](https://www.linkedin.com/) or [linkedin.com/feed](https://www.linkedin.com/feed/) and open the extension side panel to adjust filters.
 
 ## Caveats
 - Only matches the English LinkedIn UI. If your LinkedIn is in French, *toutes mes excuses*.
