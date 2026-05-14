@@ -6,6 +6,7 @@ const defaultSettings = {
   hidePromotedBy: true,
   hideLinkedInNews: true,
   hidePuzzles: true,
+  hideSidebarPhrases: [],
   transparentMode: false,
 };
 
@@ -13,6 +14,7 @@ let currentSettings = { ...defaultSettings };
 let feedObserver = null;
 let feedInterval = null;
 let applyDebounceTimer = null;
+let phraseHighlightSignature = null;
 
 const FILTER_STYLES = {
   suggested: {
@@ -35,16 +37,34 @@ const FILTER_STYLES = {
     outline: '2px solid rgba(204, 122, 0, 0.4)',
     backgroundColor: 'rgba(204, 122, 0, 0.06)',
   },
+  phrase: {
+    outline: '2px solid rgba(102, 102, 102, 0.4)',
+    backgroundColor: 'rgba(102, 102, 102, 0.06)',
+  },
 };
 
-const POST_FILTER_KEYS = new Set(['suggested', 'promoted', 'promoted-by']);
+const POST_FILTER_KEYS = new Set(['suggested', 'promoted', 'promoted-by', 'phrase']);
+const PHRASE_HIGHLIGHT_ATTR = 'data-lfr-phrase-highlight';
+const PHRASE_HIGHLIGHT_STYLE = {
+  backgroundColor: 'rgba(255, 214, 10, 0.45)',
+  boxShadow: '0 0 0 2px rgba(255, 214, 10, 0.25)',
+  borderRadius: '3px',
+  color: 'inherit',
+};
+const STATUS_MENU_ICON_ATTR = 'data-lfr-status-icon';
+const PENCIL_ICON_PATH =
+  'M13.62 3.38a2.12 2.12 0 0 0-3 0L3 11v3h3l7.62-7.62a2.12 2.12 0 0 0 0-3M5.17 12H5v-.17l5.04-5.04.17.17zm6.45-6.45-.17.17-.17-.17.17-.17a.12.12 0 0 1 .17.17';
 
 function getFeed() {
   return document.querySelector('[data-component-type="LazyColumn"]');
 }
 
 function getPostLabelText(el) {
-  return el.textContent.replace(/\s+/g, ' ').trim();
+  return getElementText(el);
+}
+
+function getElementText(el) {
+  return (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
 function isSuggestedPost(postEl) {
@@ -65,6 +85,7 @@ function scheduleApply() {
     applyDebounceTimer = null;
     applyFeedFilters();
     applySidebarWidgets();
+    applyStatusMenuPencilIcons();
   }, 150);
 }
 
@@ -73,6 +94,7 @@ function applySidebarWidgets() {
   if (newsWidget) applySidebarWidget(newsWidget, 'news');
   const puzzlesWidget = findSidebarWidget("Today\u2019s puzzles", 'a[href*="/games/"]');
   if (puzzlesWidget) applySidebarWidget(puzzlesWidget, 'puzzles');
+  applySidebarPhraseFilters();
 }
 
 // ---------------------------------------------------------------------------
@@ -113,9 +135,22 @@ function setupNavigationListener() {
 function loadSettings() {
   return new Promise((resolve) => {
     chrome.storage.sync.get(defaultSettings, (settings) => {
-      resolve(settings);
+      resolve(normalizeSettings(settings));
     });
   });
+}
+
+function normalizeSettings(settings) {
+  return {
+    ...defaultSettings,
+    ...settings,
+    hideSidebarPhrases: normalizePhraseList(settings.hideSidebarPhrases),
+  };
+}
+
+function normalizePhraseList(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((phrase) => String(phrase).trim()).filter(Boolean))];
 }
 
 // ---------------------------------------------------------------------------
@@ -123,19 +158,19 @@ function loadSettings() {
 // ---------------------------------------------------------------------------
 
 function waitForFeed() {
+  attachFeedObserver();
+  applyFeedFilters();
+
   const feed = getFeed();
   if (feed) {
-    console.log('[LFR] Feed container found, attaching observer.');
-    attachFeedObserver();
-    applyFeedFilters();
+    console.log('[LFR] Feed observer attached.');
     return;
   }
 
   const poll = setInterval(() => {
     if (getFeed()) {
       clearInterval(poll);
-      console.log('[LFR] Feed container found (after poll), attaching observer.');
-      attachFeedObserver();
+      console.log('[LFR] Feed container found (after poll).');
       applyFeedFilters();
     }
   }, 500);
@@ -154,6 +189,7 @@ function attachFeedObserver() {
   feedInterval = setInterval(() => {
     applyFeedFilters();
     applySidebarWidgets();
+    applyStatusMenuPencilIcons();
   }, 2000);
 
   // Apply a few times shortly after attach to handle posts that render
@@ -164,7 +200,7 @@ function attachFeedObserver() {
 }
 
 // ---------------------------------------------------------------------------
-// Sidebar widgets — LinkedIn News & Puzzles
+// Sidebar widgets — LinkedIn News, Puzzles & configured phrases
 // ---------------------------------------------------------------------------
 
 function findSidebarWidget(labelText, contentSelector) {
@@ -225,6 +261,48 @@ function applySidebarWidget(widget, key) {
   }
 }
 
+function applySidebarPhraseFilters() {
+  const phrases = normalizePhraseList(currentSettings.hideSidebarPhrases);
+  resetPhraseHighlightsIfChanged(phrases);
+  const sidebarCards = getSidebarCards();
+  const activeCards = new Set();
+
+  sidebarCards.forEach((card) => {
+    const matchedPhrase = getMatchingSidebarPhrase(card, phrases);
+    if (!matchedPhrase) {
+      if (card.dataset.lfrHidden === 'phrase') clearWidgetStyle(card);
+      return;
+    }
+
+    activeCards.add(card);
+    card.dataset.lfrPhrase = matchedPhrase;
+    card.dataset.lfrPhraseScope = 'sidebar';
+    applySidebarPhraseWidget(card);
+  });
+
+  [...document.querySelectorAll('[data-lfr-hidden="phrase"][data-lfr-phrase-scope="sidebar"]')].forEach((card) => {
+    if (!activeCards.has(card)) clearWidgetStyle(card);
+  });
+}
+
+function getSidebarCards() {
+  const sidebarLinks = [...document.querySelectorAll('aside a[href], [role="complementary"] a[href]')];
+  return [...new Set(sidebarLinks.map(findCardContainer).filter(Boolean))];
+}
+
+function getMatchingSidebarPhrase(card, phrases) {
+  if (!phrases.length) return null;
+  return getMatchingPhrase(getElementText(card), phrases);
+}
+
+function applySidebarPhraseWidget(card) {
+  if (card.dataset.lfrHidden === 'phrase') clearWidgetStyle(card);
+  if (!card.querySelector(`[${PHRASE_HIGHLIGHT_ATTR}="sidebar"]`)) {
+    console.log(`[LFR] Highlighting sidebar phrase: ${card.dataset.lfrPhrase}`);
+  }
+  highlightPhrases(card, normalizePhraseList(currentSettings.hideSidebarPhrases), 'sidebar');
+}
+
 function findCardContainer(el) {
   // Walk up to find the card wrapper (usually a div with padding, border, shadow).
   let current = el;
@@ -258,6 +336,10 @@ function applyWidgetStyle(element, key) {
 }
 
 function clearWidgetStyle(element) {
+  delete element.dataset.lfrHidden;
+  delete element.dataset.lfrPhrase;
+  delete element.dataset.lfrPhraseScope;
+  clearPhraseHighlights(element);
   element.style.display = '';
   element.style.opacity = '';
   element.style.outline = '';
@@ -269,9 +351,8 @@ function clearWidgetStyle(element) {
 // ---------------------------------------------------------------------------
 
 function applyFeedFilters() {
-  const feed = getFeed();
-  if (!feed) return;
-  const posts = [...feed.children];
+  const phrases = normalizePhraseList(currentSettings.hideSidebarPhrases);
+  const posts = getFeedPosts();
 
   posts.forEach((post) => {
     const filterKey = getPostFilterKey(post);
@@ -292,6 +373,287 @@ function applyFeedFilters() {
 
     if (post.dataset.lfrHidden === filterKey) clearPostStyle(post);
   });
+
+  applyFeedPhraseFilters(phrases);
+}
+
+function applyStatusMenuPencilIcons() {
+  document.querySelectorAll('[role="menu"], [role="listbox"], [role="dialog"]').forEach((menu) => {
+    menu.querySelectorAll('[role="menuitem"], [role="option"], li, button').forEach((item) => {
+      if (!isStatusMenuItem(item)) return;
+      const icon = getMenuItemIcon(item);
+      if (!icon || icon.getAttribute(STATUS_MENU_ICON_ATTR) === 'pencil') return;
+      replaceSvgWithPencil(icon);
+    });
+  });
+}
+
+function isStatusMenuItem(item) {
+  const text = `${item.getAttribute('aria-label') || ''} ${getElementText(item)}`.toLowerCase();
+  return /\bstatus\b/.test(text);
+}
+
+function getMenuItemIcon(item) {
+  return [...item.querySelectorAll('svg')].find(isTickIcon) || null;
+}
+
+function isTickIcon(svg) {
+  const id = svg.getAttribute('id') || '';
+  const ariaLabel = svg.getAttribute('aria-label') || '';
+  const text = `${id} ${ariaLabel}`.toLowerCase();
+  if (/\b(edit|pencil)\b/.test(text)) return false;
+  return /\b(check|checkmark|tick)\b/.test(text);
+}
+
+function replaceSvgWithPencil(svg) {
+  svg.setAttribute('id', 'edit-pencil-small');
+  svg.setAttribute(STATUS_MENU_ICON_ATTR, 'pencil');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('width', svg.getAttribute('width') || '16');
+  svg.setAttribute('height', svg.getAttribute('height') || '16');
+  svg.setAttribute('fill', 'currentColor');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.removeAttribute('aria-label');
+  svg.replaceChildren(createSvgPath(PENCIL_ICON_PATH));
+}
+
+function createSvgPath(d) {
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', d);
+  return path;
+}
+
+function getFeedPosts() {
+  const feed = getFeed();
+  const posts = feed ? [...feed.children] : [];
+  const fallbackSelectors = [
+    'main article',
+    '[role="main"] article',
+    'main .feed-shared-update-v2',
+    '[role="main"] .feed-shared-update-v2',
+    'main .occludable-update',
+    '[role="main"] .occludable-update',
+    'main [data-activity-urn]',
+    '[role="main"] [data-activity-urn]',
+    'main [data-id*="urn:li:activity"]',
+    '[role="main"] [data-id*="urn:li:activity"]',
+    'main [data-urn*="urn:li:activity"]',
+    '[role="main"] [data-urn*="urn:li:activity"]',
+  ];
+
+  fallbackSelectors.forEach((selector) => {
+    document.querySelectorAll(selector).forEach((post) => posts.push(post));
+  });
+
+  return [...new Set(posts)].filter(isVisibleElement);
+}
+
+function applyFeedPhraseFilters(phrases) {
+  resetPhraseHighlightsIfChanged(phrases);
+  const activeCards = new Set();
+  const cardsToHighlight = new Set();
+
+  if (phrases.length) {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!getMatchingPhrase(node.nodeValue, phrases)) return NodeFilter.FILTER_REJECT;
+        if (shouldIgnorePhraseTextNode(node)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+
+    let node = walker.nextNode();
+    while (node) {
+      const matchedPhrase = getMatchingPhrase(node.nodeValue, phrases);
+      const card = findLinkedInFeedCard(node.parentElement);
+
+      if (card) {
+        activeCards.add(card);
+        card.dataset.lfrPhrase = matchedPhrase;
+        card.dataset.lfrPhraseScope = 'feed';
+        if (card.dataset.lfrHidden === 'phrase') clearPostStyle(card);
+        cardsToHighlight.add(card);
+      }
+
+      node = walker.nextNode();
+    }
+  }
+
+  cardsToHighlight.forEach((card) => highlightPhrases(card, phrases, 'feed'));
+
+  [...document.querySelectorAll('[data-lfr-hidden="phrase"][data-lfr-phrase-scope="feed"]')].forEach((post) => {
+    if (!activeCards.has(post)) clearPostStyle(post);
+  });
+}
+
+function shouldIgnorePhraseTextNode(node) {
+  const parent = node.parentElement;
+  if (!parent) return true;
+  if (parent.closest(`[${PHRASE_HIGHLIGHT_ATTR}]`)) return true;
+  if (parent.closest('script, style, noscript, svg, nav, header, footer, aside')) return true;
+  if (parent.closest('[contenteditable="true"], input, textarea, select')) return true;
+  return false;
+}
+
+function findLinkedInFeedCard(startEl) {
+  let current = startEl;
+  while (current && current !== document.body) {
+    if (current.dataset?.lfrHidden === 'phrase' && current.dataset.lfrPhraseScope === 'feed') return current;
+    if (isLikelyFeedCard(current)) return current;
+    current = current.parentElement;
+  }
+  return null;
+}
+
+function isLikelyFeedCard(el) {
+  if (!isVisibleElement(el)) return false;
+  if (el.closest('aside, nav, header, footer')) return false;
+
+  const rect = el.getBoundingClientRect();
+  if (rect.width < 300 || rect.height < 80) return false;
+  if (rect.height > Math.max(window.innerHeight * 1.5, 1400)) return false;
+
+  const text = getElementText(el);
+  if (text.length < 30 || text.length > 12000) return false;
+
+  if (
+    el.matches(
+      'article, .feed-shared-update-v2, .occludable-update, [data-activity-urn], [data-id*="urn:li:activity"], [data-urn*="urn:li:activity"]'
+    )
+  ) {
+    return true;
+  }
+
+  return hasFeedActionControls(el, text);
+}
+
+function hasFeedActionControls(el, text) {
+  const lowerText = text.toLowerCase();
+  if (/\blike\b/.test(lowerText) && /\b(comment|repost|send)\b/.test(lowerText)) return true;
+
+  return [...el.querySelectorAll('button, a, [role="button"]')].some((control) => {
+    const label = `${control.getAttribute('aria-label') || ''} ${getElementText(control)}`.toLowerCase();
+    return /\blike\b/.test(label) || /\bcomment\b/.test(label) || /\brepost\b/.test(label) || /\bsend\b/.test(label);
+  });
+}
+
+function isVisibleElement(el) {
+  if (!el || !(el instanceof Element)) return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function getMatchingPhrase(text, phrases) {
+  const normalizedText = normalizeMatchText(text);
+  return phrases.find((phrase) => normalizedText.includes(normalizeMatchText(phrase))) || null;
+}
+
+function normalizeMatchText(value) {
+  return String(value)
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function highlightPhrases(root, phrases, scope) {
+  const pattern = getPhraseHighlightPattern(phrases);
+  if (!pattern) return;
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!pattern.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+      pattern.lastIndex = 0;
+      if (shouldIgnoreHighlightTextNode(node)) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  const nodes = [];
+  let node = walker.nextNode();
+  while (node) {
+    nodes.push(node);
+    node = walker.nextNode();
+  }
+
+  nodes.forEach((textNode) => wrapPhraseMatches(textNode, pattern, scope));
+}
+
+function clearPhraseHighlights(root = document, scope = null) {
+  const selector = scope ? `[${PHRASE_HIGHLIGHT_ATTR}="${scope}"]` : `[${PHRASE_HIGHLIGHT_ATTR}]`;
+  root.querySelectorAll(selector).forEach((highlight) => {
+    const parent = highlight.parentNode;
+    if (!parent) return;
+    highlight.replaceWith(document.createTextNode(highlight.textContent || ''));
+    parent.normalize();
+  });
+}
+
+function resetPhraseHighlightsIfChanged(phrases) {
+  const nextSignature = normalizePhraseList(phrases).map(normalizeMatchText).sort().join('\n');
+  if (nextSignature === phraseHighlightSignature) return;
+  phraseHighlightSignature = nextSignature;
+  clearPhraseHighlights();
+}
+
+function shouldIgnoreHighlightTextNode(node) {
+  const parent = node.parentElement;
+  if (!parent) return true;
+  if (parent.closest(`[${PHRASE_HIGHLIGHT_ATTR}]`)) return true;
+  if (parent.closest('script, style, noscript, svg')) return true;
+  if (parent.closest('[contenteditable="true"], input, textarea, select')) return true;
+  return false;
+}
+
+function wrapPhraseMatches(textNode, pattern, scope) {
+  const text = textNode.nodeValue;
+  const fragment = document.createDocumentFragment();
+  let lastIndex = 0;
+  pattern.lastIndex = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    const matchText = match[0];
+    if (!matchText) continue;
+
+    if (match.index > lastIndex) {
+      fragment.append(document.createTextNode(text.slice(lastIndex, match.index)));
+    }
+
+    const highlight = document.createElement('mark');
+    highlight.setAttribute(PHRASE_HIGHLIGHT_ATTR, scope);
+    Object.assign(highlight.style, PHRASE_HIGHLIGHT_STYLE);
+    highlight.textContent = matchText;
+    fragment.append(highlight);
+    lastIndex = match.index + matchText.length;
+  }
+
+  if (lastIndex === 0) return;
+  if (lastIndex < text.length) fragment.append(document.createTextNode(text.slice(lastIndex)));
+  textNode.replaceWith(fragment);
+}
+
+function getPhraseHighlightPattern(phrases) {
+  const parts = normalizePhraseList(phrases)
+    .sort((a, b) => b.length - a.length)
+    .map(getPhrasePatternPart);
+
+  if (!parts.length) return null;
+  return new RegExp(parts.join('|'), 'giu');
+}
+
+function getPhrasePatternPart(phrase) {
+  return String(phrase)
+    .trim()
+    .split(/\s+/)
+    .map(escapeRegExp)
+    .join('\\s+')
+    .replace(/'/g, "['\\u2018\\u2019]")
+    .replace(/"/g, '["\\u201C\\u201D]');
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function applyPostStyle(post, type) {
@@ -312,6 +674,9 @@ function applyPostStyle(post, type) {
 
 function clearPostStyle(post) {
   delete post.dataset.lfrHidden;
+  delete post.dataset.lfrPhrase;
+  delete post.dataset.lfrPhraseScope;
+  clearPhraseHighlights(post);
   post.style.display = '';
   post.style.opacity = '';
   post.style.outline = '';
@@ -341,7 +706,7 @@ function applyHiddenPost(post, type) {
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'SETTINGS_UPDATED') {
-    currentSettings = message.settings;
+    currentSettings = normalizeSettings(message.settings);
     applyFeedFilters();
 
     const newsWidget = findSidebarWidget('LinkedIn News', 'a[href*="/news/story/"]');
@@ -349,6 +714,8 @@ chrome.runtime.onMessage.addListener((message) => {
 
     const puzzlesWidget = findSidebarWidget("Today\u2019s puzzles", 'a[href*="/games/"]');
     if (puzzlesWidget) applySidebarWidget(puzzlesWidget, 'puzzles');
+
+    applySidebarPhraseFilters();
   }
 });
 

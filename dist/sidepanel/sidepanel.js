@@ -3,6 +3,7 @@ const togglePromoted = document.getElementById('toggle-promoted');
 const togglePromotedBy = document.getElementById('toggle-promoted-by');
 const toggleLinkedInNews = document.getElementById('toggle-linkedin-news');
 const togglePuzzles = document.getElementById('toggle-puzzles');
+const sidebarPhrases = document.getElementById('sidebar-phrases');
 const chips = [...document.querySelectorAll('.chip[data-mode]')];
 
 const defaultSettings = {
@@ -11,6 +12,7 @@ const defaultSettings = {
   hidePromotedBy: true,
   hideLinkedInNews: true,
   hidePuzzles: true,
+  hideSidebarPhrases: [],
   transparentMode: false,
 };
 
@@ -36,6 +38,7 @@ chrome.storage.sync.get(defaultSettings, (settings) => {
   togglePromotedBy.checked = settings.hidePromotedBy;
   toggleLinkedInNews.checked = settings.hideLinkedInNews;
   togglePuzzles.checked = settings.hidePuzzles;
+  sidebarPhrases.value = normalizePhraseList(settings.hideSidebarPhrases).join('\n');
   transparentMode = settings.transparentMode;
   renderChips();
 });
@@ -51,10 +54,20 @@ function onToggleChange() {
     hidePromotedBy: togglePromotedBy.checked,
     hideLinkedInNews: toggleLinkedInNews.checked,
     hidePuzzles: togglePuzzles.checked,
+    hideSidebarPhrases: getSidebarPhrases(),
     transparentMode,
   };
 
   chrome.runtime.sendMessage({ type: 'UPDATE_SETTINGS', settings });
+}
+
+function getSidebarPhrases() {
+  return normalizePhraseList(sidebarPhrases.value.split('\n'));
+}
+
+function normalizePhraseList(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((phrase) => String(phrase).trim()).filter(Boolean))];
 }
 
 toggleSuggested.addEventListener('change', onToggleChange);
@@ -62,6 +75,7 @@ togglePromoted.addEventListener('change', onToggleChange);
 togglePromotedBy.addEventListener('change', onToggleChange);
 toggleLinkedInNews.addEventListener('change', onToggleChange);
 togglePuzzles.addEventListener('change', onToggleChange);
+sidebarPhrases.addEventListener('input', onToggleChange);
 
 chips.forEach((chip) => {
   chip.addEventListener('click', () => {
