@@ -68,15 +68,23 @@ function getElementText(el) {
 }
 
 function isSuggestedPost(postEl) {
-  return [...postEl.querySelectorAll('p')].some((p) => getPostLabelText(p) === 'Suggested');
+  return hasPostLabel(postEl, (label) => label === 'Suggested');
 }
 
 function isPromotedPost(postEl) {
-  return [...postEl.querySelectorAll('p')].some((p) => getPostLabelText(p) === 'Promoted');
+  return hasPostLabel(postEl, (label) => label === 'Promoted');
 }
 
 function isPromotedByPost(postEl) {
-  return [...postEl.querySelectorAll('p')].some((p) => getPostLabelText(p).startsWith('Promoted by'));
+  return hasPostLabel(postEl, (label) => label.startsWith('Promoted by'));
+}
+
+function hasPostLabel(postEl, predicate) {
+  return [...postEl.querySelectorAll('p, span')].some((el) => {
+    const label = getPostLabelText(el);
+    if (label.length > 80) return false;
+    return predicate(label);
+  });
 }
 
 function scheduleApply() {
@@ -322,16 +330,10 @@ function findCardContainer(el) {
 
 function applyWidgetStyle(element, key) {
   if (currentSettings.transparentMode) {
-    const style = FILTER_STYLES[key] || FILTER_STYLES.promoted;
-    element.style.display = 'block';
-    element.style.opacity = '0.4';
-    element.style.outline = style.outline;
-    element.style.backgroundColor = style.backgroundColor;
+    applyTransparentFilterStyle(element, key);
   } else {
+    clearFilteredElementStyle(element);
     element.style.display = 'none';
-    element.style.opacity = '';
-    element.style.outline = '';
-    element.style.backgroundColor = '';
   }
 }
 
@@ -340,10 +342,7 @@ function clearWidgetStyle(element) {
   delete element.dataset.lfrPhrase;
   delete element.dataset.lfrPhraseScope;
   clearPhraseHighlights(element);
-  element.style.display = '';
-  element.style.opacity = '';
-  element.style.outline = '';
-  element.style.backgroundColor = '';
+  clearFilteredElementStyle(element);
 }
 
 // ---------------------------------------------------------------------------
@@ -425,7 +424,9 @@ function createSvgPath(d) {
 
 function getFeedPosts() {
   const feed = getFeed();
-  const posts = feed ? [...feed.children] : [];
+  if (feed) return [...feed.children];
+
+  const posts = [];
   const fallbackSelectors = [
     'main article',
     '[role="main"] article',
@@ -659,16 +660,10 @@ function escapeRegExp(value) {
 function applyPostStyle(post, type) {
   post.dataset.lfrHidden = type;
   if (currentSettings.transparentMode) {
-    const style = FILTER_STYLES[type] || FILTER_STYLES.promoted;
-    post.style.display = 'block';
-    post.style.opacity = '0.4';
-    post.style.outline = style.outline;
-    post.style.backgroundColor = style.backgroundColor;
+    applyTransparentFilterStyle(post, type);
   } else {
+    clearFilteredElementStyle(post);
     post.style.display = 'none';
-    post.style.opacity = '';
-    post.style.outline = '';
-    post.style.backgroundColor = '';
   }
 }
 
@@ -677,10 +672,28 @@ function clearPostStyle(post) {
   delete post.dataset.lfrPhrase;
   delete post.dataset.lfrPhraseScope;
   clearPhraseHighlights(post);
-  post.style.display = '';
-  post.style.opacity = '';
-  post.style.outline = '';
-  post.style.backgroundColor = '';
+  clearFilteredElementStyle(post);
+}
+
+function applyTransparentFilterStyle(element, key) {
+  const style = FILTER_STYLES[key] || FILTER_STYLES.promoted;
+  element.style.display = 'block';
+  element.style.opacity = '0.4';
+  element.style.outline = style.outline;
+  element.style.backgroundColor = style.backgroundColor;
+  element.style.backgroundImage = '';
+  element.style.boxShadow = '';
+  element.style.filter = '';
+}
+
+function clearFilteredElementStyle(element) {
+  element.style.display = '';
+  element.style.opacity = '';
+  element.style.outline = '';
+  element.style.backgroundColor = '';
+  element.style.backgroundImage = '';
+  element.style.boxShadow = '';
+  element.style.filter = '';
 }
 
 function getPostFilterKey(post) {
