@@ -304,11 +304,12 @@ function getMatchingSidebarPhrase(card, phrases) {
 }
 
 function applySidebarPhraseWidget(card) {
-  if (card.dataset.lfrHidden === 'phrase') clearWidgetStyle(card);
   if (!card.querySelector(`[${PHRASE_HIGHLIGHT_ATTR}="sidebar"]`)) {
-    console.log(`[LFR] Highlighting sidebar phrase: ${card.dataset.lfrPhrase}`);
+    console.log(`[LFR] Filtering sidebar phrase: ${card.dataset.lfrPhrase}`);
   }
   highlightPhrases(card, normalizePhraseList(currentSettings.hideSidebarPhrases), 'sidebar');
+  card.dataset.lfrHidden = 'phrase';
+  applyWidgetStyle(card, 'phrase');
 }
 
 function findCardContainer(el) {
@@ -356,6 +357,7 @@ function applyFeedFilters() {
   posts.forEach((post) => {
     const filterKey = getPostFilterKey(post);
     if (!filterKey) {
+      if (post.dataset.lfrHidden === 'phrase') return;
       if (POST_FILTER_KEYS.has(post.dataset.lfrHidden)) clearPostStyle(post);
       return;
     }
@@ -452,7 +454,7 @@ function getFeedPosts() {
 function applyFeedPhraseFilters(phrases) {
   resetPhraseHighlightsIfChanged(phrases);
   const activeCards = new Set();
-  const cardsToHighlight = new Set();
+  const cardsToFilter = new Set();
 
   if (phrases.length) {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
@@ -472,25 +474,36 @@ function applyFeedPhraseFilters(phrases) {
         activeCards.add(card);
         card.dataset.lfrPhrase = matchedPhrase;
         card.dataset.lfrPhraseScope = 'feed';
-        if (card.dataset.lfrHidden === 'phrase') clearPostStyle(card);
-        cardsToHighlight.add(card);
+        cardsToFilter.add(card);
       }
 
       node = walker.nextNode();
     }
   }
 
-  cardsToHighlight.forEach((card) => highlightPhrases(card, phrases, 'feed'));
+  cardsToFilter.forEach((card) => applyFeedPhrasePost(card, phrases));
 
   [...document.querySelectorAll('[data-lfr-hidden="phrase"][data-lfr-phrase-scope="feed"]')].forEach((post) => {
     if (!activeCards.has(post)) clearPostStyle(post);
   });
 }
 
+function applyFeedPhrasePost(card, phrases) {
+  if (!card.querySelector(`[${PHRASE_HIGHLIGHT_ATTR}="feed"]`)) {
+    console.log(`[LFR] Filtering feed phrase: ${card.dataset.lfrPhrase}`);
+  }
+  highlightPhrases(card, phrases, 'feed');
+  if (isPostFilteredByNonPhrase(card)) return;
+  applyPostStyle(card, 'phrase');
+}
+
+function isPostFilteredByNonPhrase(post) {
+  return post.dataset.lfrHidden && post.dataset.lfrHidden !== 'phrase';
+}
+
 function shouldIgnorePhraseTextNode(node) {
   const parent = node.parentElement;
   if (!parent) return true;
-  if (parent.closest(`[${PHRASE_HIGHLIGHT_ATTR}]`)) return true;
   if (parent.closest('script, style, noscript, svg, nav, header, footer, aside')) return true;
   if (parent.closest('[contenteditable="true"], input, textarea, select')) return true;
   return false;
