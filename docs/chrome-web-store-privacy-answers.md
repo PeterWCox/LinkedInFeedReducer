@@ -4,11 +4,17 @@ Copy you can paste into the Chrome Web Store **Privacy** tab. Written to match a
 
 ---
 
-## Single purpose description
+# Chrome Store Description
+CleanIn is a simple chrome extension that hides unwanted feed content masquerading like real content such as:
 
-CleanIn has one job: make the LinkedIn home/feed experience easier to read by hiding feed clutter the user does not want (for example suggested posts, promoted posts, and optional sections such as news or puzzles), using on-device rules the user controls in the extension’s side panel. It does not change LinkedIn outside the specific home page and feed URLs it is allowed to run on, and it does not perform unrelated functions.
+1. Suggested posts
+2. Promoted and Promoted By posts
+3. Posts containing phrases you choose
+4. Sidebar content like News and Puzzles
 
----
+They are hidden by default, but you can also show them as transparent if you desire. Phrase matches are highlighted in transparent mode and removed in hidden mode.
+
+The source code is available here if you'd prefer to build it yourself https://github.com/PeterWCox/CleanIn. I'm open to adding additional functionality, feel free to e-mail me!
 
 ## sidePanel justification
 
@@ -18,7 +24,7 @@ The side panel is the extension’s settings UI. Users turn filters on or off an
 
 ## storage justification
 
-Settings (which categories to hide and display preferences) are saved with `chrome.storage.sync` so choices persist across sessions and devices signed into the same Chrome profile. No LinkedIn credentials or personal profile data are stored—only the extension’s own boolean/options keys.
+Settings (which categories to hide, custom phrase filters, and display preferences) are saved with `chrome.storage.sync` so choices persist across sessions and devices signed into the same Chrome profile. No LinkedIn credentials or personal profile data are stored—only the extension’s own boolean/options keys and user-entered phrase filter list.
 
 ---
 
@@ -34,7 +40,7 @@ If you **remove** `activeTab` from the uploaded extension, that field may disapp
 
 ## Host permission justification
 
-Host access is limited to `https://www.linkedin.com/` and `https://www.linkedin.com/feed` (and feed path variants). That is where the content script runs so it can observe the LinkedIn home/feed experience and hide matching UI nodes according to saved settings. The extension does not request broad `<all_urls>` access; it only targets the specific LinkedIn URLs needed for this single purpose.
+Host access is limited to `https://www.linkedin.com/` and `https://www.linkedin.com/feed` (and feed path variants). That is where the content script runs so it can observe the LinkedIn home/feed experience and hide or highlight matching UI nodes according to saved settings, including user-entered phrase filters. The extension does not request broad `<all_urls>` access; it only targets the specific LinkedIn URLs needed for this single purpose.
 
 ---
 

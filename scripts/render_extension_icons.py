@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Build dist/icons from logo.png: remove the flat gray background via flood fill,
-place the mark on a white disk, and export 16/32/48/128 sizes.
+Build extension icons from logo.png: remove the flat gray background via flood
+fill, place the mark on a colored disk, and export extension sizes.
 Run from repo root: python3 scripts/render_extension_icons.py
 """
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from collections import deque
@@ -16,7 +17,8 @@ from PIL import Image, ImageDraw
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGO = os.path.join(REPO, "logo.png")
 OUT_DIR = os.path.join(REPO, "dist", "icons")
-SIZES = (16, 32, 48, 128)
+SIZES = (16, 32, 48, 64, 128)
+RELEASE_DISK_FILL = (255, 255, 255, 255)
 
 
 def flood_remove_border_background(rgba: np.ndarray, thresh: float = 50) -> np.ndarray:
@@ -60,8 +62,8 @@ def flood_remove_border_background(rgba: np.ndarray, thresh: float = 50) -> np.n
     return a
 
 
-def build_master(size: int = 512) -> Image.Image:
-    """Square RGBA: transparent outside a white disk, art centered on the disk."""
+def build_master(size: int = 512, disk_fill: tuple[int, int, int, int] = RELEASE_DISK_FILL) -> Image.Image:
+    """Square RGBA: transparent outside a colored disk, art centered on the disk."""
     im = Image.open(LOGO).convert("RGBA")
     cut = flood_remove_border_background(np.array(im))
     cut = Image.fromarray(cut)
@@ -78,7 +80,7 @@ def build_master(size: int = 512) -> Image.Image:
     margin = max(1, base - 2)  # a few px larger disk than proportional margin alone
     m = margin
     draw = ImageDraw.Draw(canvas)
-    draw.ellipse((m, m, size - 1 - m, size - 1 - m), fill=(255, 255, 255, 255))
+    draw.ellipse((m, m, size - 1 - m, size - 1 - m), fill=disk_fill)
     disc_d = (size - 1 - 2 * m)  # ~ inner diameter
     # Fit artwork in ~78% of disc diameter, centered
     target_max = int(disc_d * 0.78)
@@ -91,17 +93,38 @@ def build_master(size: int = 512) -> Image.Image:
     return canvas
 
 
+def parse_hex_color(value: str) -> tuple[int, int, int, int]:
+    color = value.strip().lstrip("#")
+    if len(color) != 6:
+        raise argparse.ArgumentTypeError("Expected a 6-digit hex color, e.g. #ffffff")
+    try:
+        r, g, b = (int(color[i : i + 2], 16) for i in (0, 2, 4))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("Expected a valid hex color") from exc
+    return (r, g, b, 255)
+
+
+def write_icon_set(out_dir: str, prefix: str, disk_fill: tuple[int, int, int, int], sizes: tuple[int, ...]) -> None:
+    os.makedirs(out_dir, exist_ok=True)
+    master = build_master(512, disk_fill)
+    for dim in sizes:
+        out = master.resize((dim, dim), Image.Resampling.LANCZOS)
+        path = os.path.join(out_dir, f"{prefix}{dim}.png")
+        out.save(path, "PNG", optimize=True)
+        print("wrote", path)
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Render CleanIn extension icons")
+    parser.add_argument("--out-dir", default=OUT_DIR, help="Directory to write icons into")
+    parser.add_argument("--disk-color", default="#ffffff", type=parse_hex_color, help="Icon disk color")
+    parser.add_argument("--prefix", default="icon", help="Output filename prefix")
+    args = parser.parse_args()
+
     if not os.path.isfile(LOGO):
         print(f"Missing {LOGO}", file=sys.stderr)
         return 1
-    os.makedirs(OUT_DIR, exist_ok=True)
-    master = build_master(512)
-    for dim in SIZES:
-        out = master.resize((dim, dim), Image.Resampling.LANCZOS)
-        path = os.path.join(OUT_DIR, f"icon{dim}.png")
-        out.save(path, "PNG", optimize=True)
-        print("wrote", path)
+    write_icon_set(args.out_dir, args.prefix, args.disk_color, SIZES)
     return 0
 
 

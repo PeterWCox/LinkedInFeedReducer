@@ -25,9 +25,7 @@
         "https://www.linkedin.com/feed/",
         "https://www.linkedin.com/feed/*"
       ],
-      "js": [
-        "content.js"
-      ],
+      "js": ["content.js"],
       "run_at": "document_idle"
     }
   ],
